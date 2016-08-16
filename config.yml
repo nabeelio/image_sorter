@@ -1,0 +1,27 @@
+#
+#
+
+# play make-believe
+dry_run: true
+
+# copy or move the files
+transfer_mode: copy
+
+# if you're brave
+delete_original: false
+
+# look for images in all folders within
+recursive_dirs: true
+
+# where to move to
+dest_dir: /Volumes/home/photos/phone
+
+# if set, where to move any gifs that are found to:
+gif_dest_dir:
+
+include_dirs:
+  -/Volumes/home/photos/phone/WhatsApp Images
+  -/Volumes/home/photos/whatsapp/WhatsApp Images
+
+exclude_dirs:
+  -

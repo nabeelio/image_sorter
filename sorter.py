@@ -1,6 +1,7 @@
 #
 import os
 import sys
+import yaml
 import arrow
 import hashlib
 from pprint import pprint
@@ -10,30 +11,15 @@ from collections import defaultdict
 
 class App(object):
 
-    DRY_RUN = True
-
-    MODE = 'copy'
     BLOCKSIZE = 65536
-    DELETE_ORIGINAL = False
-    DELETE_DUPLICATES = False
     DT_FORMAT = 'YYYY:MM:DD HH:mm:ss'
 
     def __init__(self, args):
-
-        self.sources_file = args[0]
-
-        self.src_dirs = []
-        self.dest_dir = args[1]
-
         self.hashes = {}
-
         self.counters = defaultdict(lambda: 0)
 
-        # read all the source paths in
-        with open(self.sources_file, 'r') as fp:
-            for line in fp.readlines():
-                line = line.strip()
-                self.src_dirs.append(line)
+        with open('config.yml') as fp:
+            self.config = yaml.load(fp)
 
     def _get_hash(self, image_path):
         """ generate a hash for the file """
@@ -62,21 +48,21 @@ class App(object):
             if not dtvalue:
                 continue
 
-            try:
-                dt = arrow.get(dtvalue, self.DT_FORMAT)
-                break
-            except Exception as e:
-                continue
+            dt = arrow.get(dtvalue, self.DT_FORMAT)
+            break
+
+        # TODO: Check if gif and whether to move that file
 
         if not dt:  # dunno the date for some reason, just stick in root
-            dest_dir = os.path.join(self.DEST_DIR)
+            dest_dir = os.path.join(self.config['dest_dir'])
         else:
             # create a year subfolder within the destination dir
-            dest_dir = os.path.join(self.DEST_DIR, dt.format('YYYY'))
+            dest_dir = os.path.join(self.config['dest_dir'],
+                                    dt.format('YYYY'))
 
         print('Moving {f} to {d}'.format(f=image_path, d=dest_dir))
 
-        if self.DRY_RUN:
+        if self.config['dry_run']:
             return
 
         # TODO: Move the file, figure out what the destination path *should* be
@@ -86,13 +72,17 @@ class App(object):
         exif = {}
         try:
             with Image.open(image_path) as img:
+
+                # TODO: Get image/file type
+
                 exif = {
                     ExifTags.TAGS[k]: v
                     for k, v in img._getexif().items()
                     if k in ExifTags.TAGS
                 }
-        except AttributeError:
-            (_, _, _, _, _, _, _, atime, mtime, ctime) = os.stat(image_path)
+        except AttributeError:  # no exif data
+            (_, _, _, _, _, _, _,
+             atime, mtime, ctime) = os.stat(image_path)
             dt = arrow.get(mtime).format(self.DT_FORMAT)
             exif = {
                 'DateTime': dt,  # fill with modified date/time
@@ -119,19 +109,27 @@ class App(object):
 
     def run(self):
         """ traverse through all of the source directories """
-        for sdir in self.src_dirs:
-            for root, dirs, files in os.walk(sdir):
-                for file in files:
-                    image_path = os.path.join(root, file)
-                    self._parse_file(image_path)
+        if self.config['recurse_dirs']:
+            for sdir in self.config['include_dirs']:
+                for root, dirs, files in os.walk(sdir):
+
+                    if root in self.config['exclude_dirs']:
+                        continue
+
+                    for file in files:
+                        image_path = os.path.join(root, file)
+                        self._parse_file(image_path)
+        else:
+            # TODO: Implement
+            pass
 
         pprint(self.counters.items())
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        print('sorter.py <source> <dest_path>')
-        print('    source: file with directories listed')
-        exit(-1)
+    # if len(sys.argv) < 3:
+    #     print('sorter.py <config.yml> <dest_path>')
+    #     print('    source: file with directories listed')
+    #     exit(-1)
     app = App(sys.argv[1:])
     app.run()
